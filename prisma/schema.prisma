@@ -9,3 +9,22 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+enum EmailStatus {
+  RECEIVED
+  PROCESSING
+  FAILED
+}
+
+model Email {
+  id         String      @id @default(cuid())
+  messageId  String      @unique
+  from       String
+  to         String
+  subject    String
+  body       String
+  status     EmailStatus @default(RECEIVED)
+  receivedAt DateTime
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+}
