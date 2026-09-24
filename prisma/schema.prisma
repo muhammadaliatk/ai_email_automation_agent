@@ -13,18 +13,29 @@ datasource db {
 enum EmailStatus {
   RECEIVED
   PROCESSING
+  CLASSIFIED
   FAILED
 }
 
+enum EmailCategory {
+  SUPPORT_REQUEST
+  BILLING
+  SALES_INQUIRY
+  COMPLAINT
+  SPAM
+  OTHER
+}
+
 model Email {
-  id         String      @id @default(cuid())
-  messageId  String      @unique
+  id         String         @id @default(cuid())
+  messageId  String         @unique
   from       String
   to         String
   subject    String
   body       String
-  status     EmailStatus @default(RECEIVED)
+  status     EmailStatus    @default(RECEIVED)
+  category   EmailCategory?
   receivedAt DateTime
-  createdAt  DateTime    @default(now())
-  updatedAt  DateTime    @updatedAt
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
 }
