@@ -1,9 +1,22 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { ApiError, GoogleGenAI, Type } from '@google/genai';
-import { EmailCategory } from '../../generated/prisma/enums';
+import { ApiError, GoogleGenAI, Schema, Type } from '@google/genai';
+import {
+  EmailCategory,
+  EmailSentiment,
+  EmailUrgency,
+} from '../../generated/prisma/enums';
 
 const EMAIL_CATEGORIES = Object.values(EmailCategory);
+const EMAIL_SENTIMENTS = Object.values(EmailSentiment);
+const EMAIL_URGENCIES = Object.values(EmailUrgency);
+
+export interface ExtractedEmailInfo {
+  sentiment: EmailSentiment;
+  urgency: EmailUrgency;
+  summary: string;
+  entities: { type: string; value: string }[];
+}
 const RETRYABLE_STATUS_CODES = [429, 503];
 const MAX_ATTEMPTS = 3;
 
@@ -62,41 +75,99 @@ export class GeminiService {
     return text;
   }
 
-  async classifyEmail(subject: string, body: string): Promise<EmailCategory> {
+  private async generateStructured<T>(
+    prompt: string,
+    schema: Schema,
+  ): Promise<T> {
     const response = await this.withRetry(() =>
       this.client.models.generateContent({
         model: this.model,
-        contents: [
-          'Classify the following customer email into exactly one category.',
-          '',
-          `Subject: ${subject}`,
-          `Body: ${body}`,
-        ].join('\n'),
+        contents: prompt,
         config: {
           responseMimeType: 'application/json',
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              category: { type: Type.STRING, enum: EMAIL_CATEGORIES },
-            },
-            required: ['category'],
-          },
+          responseSchema: schema,
         },
       }),
     );
 
     const text = response.text;
     if (!text) {
-      throw new Error('Gemini returned an empty classification response');
+      throw new Error('Gemini returned an empty structured response');
     }
+    return JSON.parse(text) as T;
+  }
 
-    const parsed = JSON.parse(text) as { category: string };
-    if (!EMAIL_CATEGORIES.includes(parsed.category as EmailCategory)) {
+  async classifyEmail(subject: string, body: string): Promise<EmailCategory> {
+    const { category } = await this.generateStructured<{ category: string }>(
+      [
+        'Classify the following customer email into exactly one category.',
+        '',
+        `Subject: ${subject}`,
+        `Body: ${body}`,
+      ].join('\n'),
+      {
+        type: Type.OBJECT,
+        properties: {
+          category: { type: Type.STRING, enum: EMAIL_CATEGORIES },
+        },
+        required: ['category'],
+      },
+    );
+
+    if (!EMAIL_CATEGORIES.includes(category as EmailCategory)) {
+      throw new Error(`Gemini returned an unknown category: "${category}"`);
+    }
+    return category as EmailCategory;
+  }
+
+  async extractInfo(
+    subject: string,
+    body: string,
+  ): Promise<ExtractedEmailInfo> {
+    const result = await this.generateStructured<ExtractedEmailInfo>(
+      [
+        'Analyze the following customer email and extract structured information.',
+        '- sentiment: the overall emotional tone of the customer.',
+        '- urgency: how urgently this email needs a response.',
+        '- summary: one short sentence summarizing the email.',
+        '- entities: any concrete details worth extracting (order numbers,',
+        '  product names, dates, amounts, etc). Use an empty array if none.',
+        '',
+        `Subject: ${subject}`,
+        `Body: ${body}`,
+      ].join('\n'),
+      {
+        type: Type.OBJECT,
+        properties: {
+          sentiment: { type: Type.STRING, enum: EMAIL_SENTIMENTS },
+          urgency: { type: Type.STRING, enum: EMAIL_URGENCIES },
+          summary: { type: Type.STRING },
+          entities: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                type: { type: Type.STRING },
+                value: { type: Type.STRING },
+              },
+              required: ['type', 'value'],
+            },
+          },
+        },
+        required: ['sentiment', 'urgency', 'summary', 'entities'],
+      },
+    );
+
+    if (!EMAIL_SENTIMENTS.includes(result.sentiment)) {
       throw new Error(
-        `Gemini returned an unknown category: "${parsed.category}"`,
+        `Gemini returned an unknown sentiment: "${result.sentiment}"`,
       );
     }
-
-    return parsed.category as EmailCategory;
+    if (!EMAIL_URGENCIES.includes(result.urgency)) {
+      throw new Error(
+        `Gemini returned an unknown urgency: "${result.urgency}"`,
+      );
+    }
+    return result;
   }
 }

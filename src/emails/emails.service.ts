@@ -31,7 +31,15 @@ export class EmailsService {
       },
     });
 
-    return this.classify(email.id);
+    return this.processNewEmail(email.id);
+  }
+
+  private async processNewEmail(emailId: string) {
+    const classified = await this.classify(emailId);
+    if (classified.status === 'FAILED') {
+      return classified;
+    }
+    return this.extract(emailId);
   }
 
   private async classify(emailId: string) {
@@ -47,6 +55,29 @@ export class EmailsService {
       });
     } catch (error) {
       this.logger.error(`Classification failed for email ${emailId}`, error);
+      return this.prisma.email.update({
+        where: { id: emailId },
+        data: { status: 'FAILED' },
+      });
+    }
+  }
+
+  private async extract(emailId: string) {
+    const email = await this.findOne(emailId);
+    try {
+      const info = await this.gemini.extractInfo(email.subject, email.body);
+      return this.prisma.email.update({
+        where: { id: emailId },
+        data: {
+          sentiment: info.sentiment,
+          urgency: info.urgency,
+          summary: info.summary,
+          extractedEntities: info.entities,
+          status: 'EXTRACTED',
+        },
+      });
+    } catch (error) {
+      this.logger.error(`Extraction failed for email ${emailId}`, error);
       return this.prisma.email.update({
         where: { id: emailId },
         data: { status: 'FAILED' },

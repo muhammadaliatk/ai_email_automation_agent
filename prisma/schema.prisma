@@ -14,6 +14,7 @@ enum EmailStatus {
   RECEIVED
   PROCESSING
   CLASSIFIED
+  EXTRACTED
   FAILED
 }
 
@@ -26,16 +27,32 @@ enum EmailCategory {
   OTHER
 }
 
+enum EmailSentiment {
+  POSITIVE
+  NEUTRAL
+  NEGATIVE
+}
+
+enum EmailUrgency {
+  LOW
+  MEDIUM
+  HIGH
+}
+
 model Email {
-  id         String         @id @default(cuid())
-  messageId  String         @unique
-  from       String
-  to         String
-  subject    String
-  body       String
-  status     EmailStatus    @default(RECEIVED)
-  category   EmailCategory?
-  receivedAt DateTime
-  createdAt  DateTime       @default(now())
-  updatedAt  DateTime       @updatedAt
+  id                String          @id @default(cuid())
+  messageId         String          @unique
+  from              String
+  to                String
+  subject           String
+  body              String
+  status            EmailStatus     @default(RECEIVED)
+  category          EmailCategory?
+  sentiment         EmailSentiment?
+  urgency           EmailUrgency?
+  summary           String?
+  extractedEntities Json?
+  receivedAt        DateTime
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
 }
