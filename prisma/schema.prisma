@@ -16,6 +16,8 @@ enum EmailStatus {
   CLASSIFIED
   EXTRACTED
   DRAFTED
+  APPROVED
+  REJECTED
   FAILED
 }
 
@@ -54,6 +56,8 @@ model Email {
   summary           String?
   extractedEntities Json?
   draftReply        String?
+  finalReply        String?
+  rejectionReason   String?
   receivedAt        DateTime
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt

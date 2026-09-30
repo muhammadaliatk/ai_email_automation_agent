@@ -1,7 +1,14 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { GeminiService } from '../gemini/gemini.service';
 import { IngestEmailDto } from './dto/ingest-email.dto';
+import { ApproveEmailDto } from './dto/approve-email.dto';
+import { RejectEmailDto } from './dto/reject-email.dto';
 
 @Injectable()
 export class EmailsService {
@@ -118,6 +125,40 @@ export class EmailsService {
         data: { status: 'FAILED' },
       });
     }
+  }
+
+  async approve(emailId: string, dto: ApproveEmailDto) {
+    const email = await this.findOne(emailId);
+    if (email.status !== 'DRAFTED') {
+      throw new BadRequestException(
+        `Email must be in DRAFTED status to approve (current: ${email.status})`,
+      );
+    }
+
+    return this.prisma.email.update({
+      where: { id: emailId },
+      data: {
+        status: 'APPROVED',
+        finalReply: dto.editedReply ?? email.draftReply,
+      },
+    });
+  }
+
+  async reject(emailId: string, dto: RejectEmailDto) {
+    const email = await this.findOne(emailId);
+    if (email.status !== 'DRAFTED') {
+      throw new BadRequestException(
+        `Email must be in DRAFTED status to reject (current: ${email.status})`,
+      );
+    }
+
+    return this.prisma.email.update({
+      where: { id: emailId },
+      data: {
+        status: 'REJECTED',
+        rejectionReason: dto.reason,
+      },
+    });
   }
 
   findAll() {
