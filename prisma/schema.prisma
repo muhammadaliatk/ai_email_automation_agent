@@ -15,6 +15,7 @@ enum EmailStatus {
   PROCESSING
   CLASSIFIED
   EXTRACTED
+  DRAFTED
   FAILED
 }
 
@@ -52,6 +53,7 @@ model Email {
   urgency           EmailUrgency?
   summary           String?
   extractedEntities Json?
+  draftReply        String?
   receivedAt        DateTime
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt

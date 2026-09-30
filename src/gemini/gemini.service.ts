@@ -170,4 +170,41 @@ export class GeminiService {
     }
     return result;
   }
+
+  async generateReply(input: {
+    subject: string;
+    body: string;
+    category: EmailCategory;
+    sentiment: EmailSentiment;
+    urgency: EmailUrgency;
+    summary: string;
+    entities: { type: string; value: string }[];
+  }): Promise<string> {
+    const entitiesText = input.entities.length
+      ? input.entities.map((e) => `${e.type}: ${e.value}`).join(', ')
+      : 'none';
+
+    const prompt = [
+      'You are a customer support agent replying to the email below.',
+      'Write only the reply body (no subject line). Be professional, concise,',
+      'and match a tone appropriate for the urgency and sentiment given.',
+      'Do not invent facts (e.g. refund timelines, order status) that are not',
+      'in the email or the extracted details below.',
+      '',
+      `Category: ${input.category}`,
+      `Customer sentiment: ${input.sentiment}`,
+      `Urgency: ${input.urgency}`,
+      `Summary: ${input.summary}`,
+      `Extracted details: ${entitiesText}`,
+      '',
+      `Original subject: ${input.subject}`,
+      `Original body: ${input.body}`,
+    ].join('\n');
+
+    const reply = await this.generateText(prompt);
+    if (!reply) {
+      throw new Error('Gemini returned an empty reply draft');
+    }
+    return reply;
+  }
 }

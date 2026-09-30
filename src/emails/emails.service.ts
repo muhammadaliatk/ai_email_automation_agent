@@ -39,7 +39,13 @@ export class EmailsService {
     if (classified.status === 'FAILED') {
       return classified;
     }
-    return this.extract(emailId);
+
+    const extracted = await this.extract(emailId);
+    if (extracted.status === 'FAILED' || extracted.category === 'SPAM') {
+      return extracted;
+    }
+
+    return this.draft(emailId);
   }
 
   private async classify(emailId: string) {
@@ -78,6 +84,35 @@ export class EmailsService {
       });
     } catch (error) {
       this.logger.error(`Extraction failed for email ${emailId}`, error);
+      return this.prisma.email.update({
+        where: { id: emailId },
+        data: { status: 'FAILED' },
+      });
+    }
+  }
+
+  private async draft(emailId: string) {
+    const email = await this.findOne(emailId);
+    try {
+      const entities = (email.extractedEntities ?? []) as {
+        type: string;
+        value: string;
+      }[];
+      const draftReply = await this.gemini.generateReply({
+        subject: email.subject,
+        body: email.body,
+        category: email.category!,
+        sentiment: email.sentiment!,
+        urgency: email.urgency!,
+        summary: email.summary!,
+        entities,
+      });
+      return this.prisma.email.update({
+        where: { id: emailId },
+        data: { draftReply, status: 'DRAFTED' },
+      });
+    } catch (error) {
+      this.logger.error(`Draft generation failed for email ${emailId}`, error);
       return this.prisma.email.update({
         where: { id: emailId },
         data: { status: 'FAILED' },
