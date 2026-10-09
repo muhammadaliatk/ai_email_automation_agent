@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { GeminiService } from '../gemini/gemini.service';
+import { MailService } from '../mail/mail.service';
 import { IngestEmailDto } from './dto/ingest-email.dto';
 import { ApproveEmailDto } from './dto/approve-email.dto';
 import { RejectEmailDto } from './dto/reject-email.dto';
@@ -17,6 +18,7 @@ export class EmailsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly gemini: GeminiService,
+    private readonly mail: MailService,
   ) {}
 
   async ingest(dto: IngestEmailDto) {
@@ -158,6 +160,27 @@ export class EmailsService {
         status: 'REJECTED',
         rejectionReason: dto.reason,
       },
+    });
+  }
+
+  async send(emailId: string) {
+    const email = await this.findOne(emailId);
+    if (email.status !== 'APPROVED') {
+      throw new BadRequestException(
+        `Email must be in APPROVED status to send (current: ${email.status})`,
+      );
+    }
+
+    await this.mail.sendReply({
+      from: email.to,
+      to: email.from,
+      subject: email.subject,
+      text: email.finalReply!,
+    });
+
+    return this.prisma.email.update({
+      where: { id: emailId },
+      data: { status: 'SENT', sentAt: new Date() },
     });
   }
 

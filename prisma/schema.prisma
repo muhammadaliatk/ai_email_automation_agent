@@ -18,6 +18,7 @@ enum EmailStatus {
   DRAFTED
   APPROVED
   REJECTED
+  SENT
   FAILED
 }
 
@@ -58,6 +59,7 @@ model Email {
   draftReply        String?
   finalReply        String?
   rejectionReason   String?
+  sentAt            DateTime?
   receivedAt        DateTime
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt

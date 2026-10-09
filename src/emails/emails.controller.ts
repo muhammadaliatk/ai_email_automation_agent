@@ -32,4 +32,9 @@ export class EmailsController {
   reject(@Param('id') id: string, @Body() dto: RejectEmailDto) {
     return this.emailsService.reject(id, dto);
   }
+
+  @Post(':id/send')
+  send(@Param('id') id: string) {
+    return this.emailsService.send(id);
+  }
 }
